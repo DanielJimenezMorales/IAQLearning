@@ -8,21 +8,18 @@ namespace Assets.Scripts.SampleMind
     public class QLearningMind : AbstractPathMind
     {
         #region Variables generales
+        private Queue<int> currentPlan = new Queue<int>();
         private float[,] qTable = new float[4, 112]; //y = estados, x = acciones
         private float alpha = 0.5f;
         private float gamma = 0.5f;
+        private QTextFileWriter writer;
         #endregion
 
         #region Variables explorar
-        private const int N_EPI_MAX = 10; // número de episodios como máximo. (Número de veces que se repite el algoritmo partiendo de una casilla
+        private const int N_EPI_MAX = 100; // número de episodios como máximo. (Número de veces que se repite el algoritmo partiendo de una casilla
         //Aleatoria vacía)
         private const int N_ITER_MAX = 100; // número de iteraciones por cada episodio como máximo.
         #endregion
-
-        #region Variables explotar
-        #endregion
-
-
 
         public override void Repath()
         {
@@ -31,26 +28,34 @@ namespace Assets.Scripts.SampleMind
 
         public override Locomotion.MoveDirection GetNextMove(BoardInfo boardInfo, CellInfo currentPos, CellInfo[] goals)
         {
-            // EstructuraDatosCamino será una estructura de datos
-            // (pila, cola, árbol, tabla....) conveniente para este problema.
-            // Debe contener las acciones que lleven desde el inicio hasta la meta.
-            /*if EstructuraDatosCamino.IsVacia
+            int currentMovement = -1;
+
+            if(currentPlan.Count == 0)
             {
-                qTable = Explorar()
-            EstructuraDatosCamino = Explotar(TablaQ, celda_inicial)
-            val = EstructuraDatos.Leer()
+                Explorar(boardInfo, goals);
+
+                if (writer == null)
+                {
+                    writer = new QTextFileWriter();
+                }
+                writer.CreateText("/QTable.txt", QTableInText());
+
+                currentPlan = Explotar2(currentPos, boardInfo, goals);
+                currentMovement = currentPlan.Dequeue();
             }
             else
             {
-                val = EstructuraDatos.Leer()
+                currentMovement = currentPlan.Dequeue();
             }
-            if (val == 0) return Locomotion.MoveDirection.Up;
-            if (val == 1) return Locomotion.MoveDirection.Down;
-            if (val == 2) return Locomotion.MoveDirection.Left;*/
-            return Locomotion.MoveDirection.Right;
+
+            if (currentMovement == 0) return Locomotion.MoveDirection.Up;
+            if (currentMovement == 1) return Locomotion.MoveDirection.Down;
+            if (currentMovement == 2) return Locomotion.MoveDirection.Right;
+            
+            return Locomotion.MoveDirection.Left;
         }
 
-        private float Explorar(CellInfo initialCell, BoardInfo board, CellInfo[] goals)
+        private void Explorar(BoardInfo board, CellInfo[] goals)
         {
             CellInfo nextCell = null;
             CellInfo currentCell = null;
@@ -63,6 +68,7 @@ namespace Assets.Scripts.SampleMind
             float reward = 0f;
             float nextQmax = 0f;
             float newQ = 0f;
+
             for (int i = 0; i < N_EPI_MAX; i++)
             {
                 currentIterations = 0;
@@ -71,8 +77,11 @@ namespace Assets.Scripts.SampleMind
                 while(!stopCondition)
                 {
                     currentCell = nextCell;
-                    currentAction = GetRandomAction();
-                    nextCell = GetNeighbourCell(currentCell, currentAction);//Solucionar
+                    do
+                    {
+                        currentAction = GetRandomAction();
+                    } while (!CheckIfNeighbourIsOut(currentCell, currentAction, board));
+                    nextCell = GetNeighbourCell(currentCell, currentAction, board);
                     currentQ = GetActualQ(GetCellID(currentCell, board), currentAction);
                     //reward = GetReward(currentCell, current_action, nextCell);?????????????
                     reward = GetReward(nextCell, goals[0]);
@@ -83,25 +92,100 @@ namespace Assets.Scripts.SampleMind
                     stopCondition = CheckExploreStopCondition(currentIterations, nextCell, goals[0]);
                 }
             }
-            return 0f;
         }
 
-        private CellInfo GetNeighbourCell(CellInfo currentCell, int action)
+        private string QTableInText()
         {
-            int newRow = -1;
-            int newColumn = -1;
-
-            if(action == 0)
+            string table = System.String.Empty;
+            table += "Tabla Q:\nPrecisión de datos: 3 decimales\n";
+            for (int i = 0; i < 112; i++)
             {
+                string row = System.String.Empty;
 
+                for (int j = 0; j < 4; j++)
+                {
+                    row += ", " + qTable[j, i].ToString("F3");
+                }
+
+                table += i + "--" + row + "\n";
             }
+
+            return table;
+        }
+
+        private bool CheckIfNeighbourIsOut(CellInfo currentCell, int action, BoardInfo board)
+        {
+            CellInfo[] neighbours = currentCell.WalkableNeighbours(board);
+
+            if (action == 0) //NORTE
+            {
+                if(neighbours[0] == null)
+                {
+                    return false;
+                }
+            }
+            else if (action == 1) //SUR
+            {
+                if (neighbours[2] == null)
+                {
+                    return false;
+                }
+            }
+            else if (action == 2) //ESTE
+            {
+                if (neighbours[1] == null)
+                {
+                    return false;
+                }
+            }
+            else if (action == 3) //OESTE
+            {
+                if (neighbours[3] == null)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private CellInfo GetNeighbourCell(CellInfo currentCell, int action, BoardInfo board)
+        {
+            int newRow = currentCell.RowId;
+            int newColumn = currentCell.ColumnId;
+
+            if (action == 0) //NORTE
+            {
+                newRow++;
+            }
+            else if (action == 1) //SUR
+            {
+                newRow--;
+            }
+            else if (action == 2) //ESTE
+            {
+                newColumn++;
+            }
+            else if (action == 3) //OESTE
+            {
+                newColumn--;
+            }
+
+            return board.CellInfos[newColumn, newRow];
         }
 
         private CellInfo GetInitialRandomCell(BoardInfo board)
         {
-            int randomRow = Random.Range(0, board.NumRows);
-            int randomColumn = Random.Range(0, board.NumColumns);
-            return board.CellInfos[randomRow, randomColumn];
+            int randomRow = -1;
+            int randomColumn = -1;
+
+            do
+            {
+                randomRow = Random.Range(0, board.NumRows);
+                randomColumn = Random.Range(0, board.NumColumns);
+            } while (!board.CellInfos[randomColumn, randomRow].Walkable);
+
+            return board.CellInfos[randomColumn, randomRow];
         }
 
         private int GetRandomAction()
@@ -133,7 +217,8 @@ namespace Assets.Scripts.SampleMind
         private int GetCellID(CellInfo cell, BoardInfo board)
         {
             //Numero de fila * ancho de fila + numero de columna
-            return (cell.RowId * board.NumRows) + cell.ColumnId; //?
+            //Empezamos desde abajo a la izquierda y se va subiendo columnas de izquierda a derecha
+            return (cell.RowId * board.NumColumns) + cell.ColumnId;
         }
 
         private float GetNextMaxQ(int cellID)
@@ -173,6 +258,49 @@ namespace Assets.Scripts.SampleMind
             }
 
             return false;
+        }
+
+        private Queue<int> Explotar2(CellInfo initialPos, BoardInfo board, CellInfo[] goals)
+        {
+            Queue<int> path = new Queue<int>();
+            CellInfo nextCell = null;
+            CellInfo currentCell = null;
+            nextCell = initialPos;
+            bool hasFoundGoal = false;
+
+            do
+            {
+                currentCell = nextCell;
+                int decisionMade = GetBestAction(GetCellID(currentCell, board));
+
+                CellInfo neighbour = GetNeighbourCell(currentCell, decisionMade, board);
+                nextCell = neighbour;
+
+                path.Enqueue(decisionMade);
+                if (goals[0].RowId == neighbour.RowId && goals[0].ColumnId == neighbour.ColumnId)
+                {
+                    hasFoundGoal = true;
+                }
+
+            } while (!hasFoundGoal);
+
+            return path;
+        }
+
+        private int GetBestAction(int currentCellID)
+        {
+            float bestQ = -Mathf.Infinity;
+            int bestAction = -1;
+
+            for (int i = 0; i < 4; i++)
+            {
+                if(qTable[i, currentCellID] > bestQ)
+                {
+                    bestQ = qTable[i, currentCellID];
+                    bestAction = i;
+                }
+            }
+            return bestAction;
         }
     }
 }
