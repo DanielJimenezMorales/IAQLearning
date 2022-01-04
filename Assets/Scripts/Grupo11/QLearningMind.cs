@@ -10,20 +10,25 @@ namespace Assets.Scripts.SampleMind
         #region Variables generales
         private Queue<int> currentPlan = new Queue<int>();
         private float[,] qTable = new float[4, 112]; //y = estados, x = acciones
-        private float alpha = 0.5f;
-        private float gamma = 0.5f;
+        
         private QTextFileWriter writer;
         #endregion
 
         #region Variables explorar
-        private const int N_EPI_MAX = 100; // número de episodios como máximo. (Número de veces que se repite el algoritmo partiendo de una casilla
-        //Aleatoria vacía)
-        private const int N_ITER_MAX = 100; // número de iteraciones por cada episodio como máximo.
+        [SerializeField] [Range(10, 1000)] [Tooltip("número de episodios como máximo. (Número de veces que se repite el algoritmo partiendo de una casilla aleatoria vacía)")]
+        private int N_EPI_MAX = 100;
+        [SerializeField] [Range(10, 1000)] [Tooltip("Número de iteraciones por cada episodio como máximo.")]
+        private int N_ITER_MAX = 100;
+
+        [SerializeField] [Range(0f, 1f)] [Tooltip("Ritmo de aprendizaje.")]
+        private float alpha = 0.5f;
+        [SerializeField] [Range(0f, 1f)] [Tooltip("Ratio de descuento.")]
+        private float gamma = 0.5f;
         #endregion
 
         public override void Repath()
         {
-
+            currentPlan.Clear();
         }
 
         public override Locomotion.MoveDirection GetNextMove(BoardInfo boardInfo, CellInfo currentPos, CellInfo[] goals)
